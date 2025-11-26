@@ -57,11 +57,39 @@ def load_methods(setting, data_dir):
     if not os.path.exists(data_dir):
         print(f"[WARNING] Data directory {data_dir} does not exist")
         return methods
-    for file in os.listdir(data_dir):
-        if file.endswith("_single_label.npy"):
-            prefix = file.replace("_single_label.npy", "")
-            filepath = os.path.join(data_dir, file)
-            methods.append((prefix, filepath, None))
+    
+    if setting == "single":
+        # For single-label, look for files ending with _single_label.npy
+        for file in os.listdir(data_dir):
+            if file.endswith("_single_label.npy"):
+                prefix = file.replace("_single_label.npy", "")
+                filepath = os.path.join(data_dir, file)
+                methods.append((prefix, filepath, None))
+    elif setting in ["binary", "multiclass"]:
+        # For binary/multiclass, look for pairs of _embeddings.npy and _labels.npy files
+        seen_prefixes = set()
+        for file in os.listdir(data_dir):
+            if file.endswith("_embeddings.npy"):
+                prefix = file.replace("_embeddings.npy", "")
+                # Check if this matches the setting (binary_* or multiclass_*)
+                if setting == "binary" and prefix.startswith("binary_"):
+                    method_name = prefix.replace("binary_", "")
+                    if method_name not in seen_prefixes:
+                        emb_file = os.path.join(data_dir, file)
+                        lbl_file = os.path.join(data_dir, f"{prefix}_labels.npy")
+                        if os.path.exists(lbl_file):
+                            # Store as tuple: (embeddings, labels) in a single file path
+                            # We'll handle this specially in the loading code
+                            methods.append((method_name, emb_file, lbl_file))
+                            seen_prefixes.add(method_name)
+                elif setting == "multiclass" and prefix.startswith("multiclass_"):
+                    method_name = prefix.replace("multiclass_", "")
+                    if method_name not in seen_prefixes:
+                        emb_file = os.path.join(data_dir, file)
+                        lbl_file = os.path.join(data_dir, f"{prefix}_labels.npy")
+                        if os.path.exists(lbl_file):
+                            methods.append((method_name, emb_file, lbl_file))
+                            seen_prefixes.add(method_name)
     return methods
 
 def main(args):
@@ -86,6 +114,9 @@ def main(args):
             # Assume relative paths are relative to data/ directory
             file_path = os.path.join(REPO_ROOT, args.file)
         methods = [(os.path.splitext(os.path.basename(args.file))[0].replace('_single_label', ''), file_path, None)]
+    elif args.setting == "baseline":
+        # For baseline, create a dummy method entry
+        methods = [("baseline", None, None)]
     else:
         methods = load_methods(args.setting, data_dir)
 
@@ -115,7 +146,12 @@ def main(args):
                 baseline_dir = os.path.join(REPO_ROOT, 'gold_labels')
             train_embeddings = np.load(os.path.join(baseline_dir, 'train_embeddings.npy'), allow_pickle=True)
             train_labels = np.load(os.path.join(baseline_dir, 'train_labels.npy'), allow_pickle=True)
+        elif label_file is not None:
+            # For binary/multiclass with separate embedding and label files
+            train_embeddings = np.load(emb_file, allow_pickle=True)
+            train_labels = np.load(label_file, allow_pickle=True)
         else:
+            # For single-label or other formats with combined files
             data = np.load(emb_file, allow_pickle=True)
             label_map = {"HD": 0, "CV": 1, "VO": 2, "NONE": 3, "None": 3}
 
