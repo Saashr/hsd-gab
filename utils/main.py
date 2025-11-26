@@ -9,6 +9,10 @@ from sklearn.multiclass import OneVsRestClassifier
 import argparse
 import ast
 
+# Get the repository root directory (parent of utils/)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+
 def refine_labels(model, X_unlabeled, confidence_threshold):
     decision_function = model.decision_function(X_unlabeled)
     preds = (decision_function >= confidence_threshold).astype(int)
@@ -23,8 +27,13 @@ def refine_labels(model, X_unlabeled, confidence_threshold):
         preds = np.hstack([preds, none_col])
     return preds
 
-def save_confidence_scores_to_files(models, test_embeddings, label_names=None, output_dir="confidence_scores"):
+def save_confidence_scores_to_files(models, test_embeddings, label_names=None, output_dir=None):
     """Save confidence (decision function) scores for each label classifier."""
+    if output_dir is None:
+        output_dir = os.path.join(REPO_ROOT, 'logs', 'confidence_scores')
+    elif not os.path.isabs(output_dir):
+        output_dir = os.path.join(REPO_ROOT, 'logs', output_dir)
+    
     if hasattr(models, "estimators_"):
         n_labels = len(models.estimators_)
     else:
@@ -45,6 +54,9 @@ def save_confidence_scores_to_files(models, test_embeddings, label_names=None, o
 
 def load_methods(setting, data_dir):
     methods = []
+    if not os.path.exists(data_dir):
+        print(f"[WARNING] Data directory {data_dir} does not exist")
+        return methods
     for file in os.listdir(data_dir):
         if file.endswith("_single_label.npy"):
             prefix = file.replace("_single_label.npy", "")
@@ -53,10 +65,29 @@ def load_methods(setting, data_dir):
     return methods
 
 def main(args):
-    current_directory = os.getcwd()
-    test_embeddings = np.load(os.path.join(current_directory, 'test_embeddings.npy'))
-    test_labels = np.load(os.path.join(current_directory, 'test_labels.npy'))
-    methods = load_methods(args.setting, args.data_dir)
+    # Load test embeddings and labels from gold_labels/
+    test_emb_file = os.path.join(REPO_ROOT, 'gold_labels', 'test_embeddings.npy')
+    test_lbl_file = os.path.join(REPO_ROOT, 'gold_labels', 'test_labels.npy')
+    test_embeddings = np.load(test_emb_file)
+    test_labels = np.load(test_lbl_file)
+    
+    # Resolve data_dir path
+    if not os.path.isabs(args.data_dir):
+        data_dir = os.path.join(REPO_ROOT, 'data', args.data_dir)
+    else:
+        data_dir = args.data_dir
+    
+    # Handle file argument if provided
+    if args.file:
+        # If file is provided, use it directly
+        if os.path.isabs(args.file):
+            file_path = args.file
+        else:
+            # Assume relative paths are relative to data/ directory
+            file_path = os.path.join(REPO_ROOT, args.file)
+        methods = [(os.path.splitext(os.path.basename(args.file))[0].replace('_single_label', ''), file_path, None)]
+    else:
+        methods = load_methods(args.setting, data_dir)
 
     label_scheme = {
         "HD": [1, 0, 0],
@@ -74,10 +105,16 @@ def main(args):
 
         # --- Load embeddings and labels ---
         if method_name == "baseline" or args.setting == "baseline":
-            if not args.baseline_data_dir:
-                raise ValueError("Baseline data directory must be specified for baseline setting.")
-            train_embeddings = np.load(os.path.join(args.baseline_data_dir, 'train_embeddings.npy'), allow_pickle=True)
-            train_labels = np.load(os.path.join(args.baseline_data_dir, 'train_labels.npy'), allow_pickle=True)
+            # Baseline data should be in gold_labels/
+            if args.baseline_data_dir:
+                if os.path.isabs(args.baseline_data_dir):
+                    baseline_dir = args.baseline_data_dir
+                else:
+                    baseline_dir = os.path.join(REPO_ROOT, args.baseline_data_dir)
+            else:
+                baseline_dir = os.path.join(REPO_ROOT, 'gold_labels')
+            train_embeddings = np.load(os.path.join(baseline_dir, 'train_embeddings.npy'), allow_pickle=True)
+            train_labels = np.load(os.path.join(baseline_dir, 'train_labels.npy'), allow_pickle=True)
         else:
             data = np.load(emb_file, allow_pickle=True)
             label_map = {"HD": 0, "CV": 1, "VO": 2, "NONE": 3, "None": 3}
@@ -285,15 +322,23 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.data_dir == "all":
-        for directory in ["baseline_data", "resampled_data", "resampled_data2_1", "resampled_data3_1",
-                          "sing_label_data", "sing_label_data2", "sing_label_data3"]:
+        for directory in ["resampled_data", "resampled_data2_1", "resampled_data3_1",
+                          "sing_label_data", "sing_label_data2_1", "sing_label_data3_1"]:
             print(f"\n--- Processing directory: {directory} ---")
             args.data_dir = directory
-            args.baseline_data_dir = directory if directory == "baseline_data" and args.setting == "baseline" else None
+            # For baseline, use gold_labels directory
+            if args.setting == "baseline":
+                args.baseline_data_dir = "gold_labels"
+            else:
+                args.baseline_data_dir = None
             try:
                 main(args)
             except Exception as e:
                 print(f"[ERROR] Failed to process {directory}: {str(e)}")
     else:
+        if args.baseline_data_dir and not os.path.isabs(args.baseline_data_dir):
+            # If baseline_data_dir is relative, it should be relative to gold_labels
+            if args.baseline_data_dir == "baseline_data" or "gold" not in args.baseline_data_dir:
+                args.baseline_data_dir = os.path.join(REPO_ROOT, 'gold_labels')
         main(args)
 
