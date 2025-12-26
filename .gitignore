@@ -17,3 +17,23 @@ sing_label_data2_1/*.npy
 sing_label_data3_1/*.npy
 *.npy
 *.sh
+
+
+# === HPC / SLURM outputs ===
+logs/
+results/
+*.out
+*.err
+
+# === Data (generated / large) ===
+data/
+
+# === Python cache ===
+__pycache__/
+*.pyc
+
+# === Editor noise ===
+.vim/
+*.swp
+.DS_Store
+

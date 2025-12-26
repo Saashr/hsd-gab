@@ -1,0 +1,40 @@
+#!/bin/bash
+#SBATCH --job-name=single_file_test
+#SBATCH --account=r00018
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=1-00:00:00
+#SBATCH --output=logs/single_file_%j.out
+#SBATCH --error=logs/single_file_%j.err
+
+echo "--------------------------------------"
+echo "Activating Conda..."
+module load conda
+conda activate HSD
+echo "Environment: $CONDA_DEFAULT_ENV"
+echo "Python: $(which python3)"
+echo "--------------------------------------"
+
+# Move into repo
+cd /geode2/home/u080/saashr/BigRed200/hsd-gab
+echo "Working directory: $(pwd)"
+echo "--------------------------------------"
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# SELECT EXACT FILE TO RUN HERE
+TARGET_FILE="data/sing_label_data/multiclass_ADASYN_single_label.npy"
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+echo "Running scheme-1-single.py on:"
+echo "  $TARGET_FILE"
+echo "--------------------------------------"
+
+python3 utils/scheme-1-single.py --file "$TARGET_FILE"
+
+echo "--------------------------------------"
+echo "SINGLE FILE RUN COMPLETE"
+echo "--------------------------------------"
+

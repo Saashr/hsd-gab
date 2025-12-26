@@ -12,8 +12,7 @@ REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Extract BERT embeddings from TSV file')
-parser.add_argument('--input', type=str, default=None, help='Input TSV file path (relative to data/)')
-parser.add_argument('--output_embeddings', type=str, default=None, help='Output embeddings file path (relative to gold_labels/)')
+
 parser.add_argument('--output_labels', type=str, default=None, help='Output labels file path (relative to gold_labels/)')
 args = parser.parse_args()
 
